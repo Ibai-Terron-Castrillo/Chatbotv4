@@ -141,13 +141,13 @@ async function startBot() {
             else if (command === 'manual') {
                 const manualText = `Bienvenido al chat de SmartLan. Te ayudaré con los manuales. Tienes 3 opciones:\n\n` +
                                  `1. Si quieres *sustitución de elementos* (ej: AS-35031), escribe solo el código.\n` +
-                                 `2. Si quieres *manual de mantenimiento*, escribe: *mantenimiento*.\n` +
+                                 `2. Si quieres *manual de mantenimiento*, escribe: *mantenimiento* o *mantenimientor5pro*.\n` +
                                  `3. Si quieres ver *la tensión de las correas*, escribe: *tension*.\n\n` +
                                  `Escribe el código o la opción deseada:`;
                 await sock.sendMessage(senderJid, { text: manualText });
             }
             // 
-            else if (['as-35031', 'mantenimiento', 'tension'].includes(command)) {
+            else if (['as-35031', 'mantenimiento', 'mantenimientor5pro', 'tension'].includes(command)) {
                 const pdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
                 console.log(`📂 Buscando manual en: ${pdfPath}`);
 
@@ -179,7 +179,8 @@ async function startBot() {
                     });
                 }
             }
-            // 
+
+            // --- Markel Biain --- sugerencia de error de tipeo
             else if (userMessage !== '') {
                 const closest = getClosestCommand(command);
                 if (closest) {
@@ -209,7 +210,7 @@ const knownCommands = [
     'lift',
     'mantenimiento',
     'tension',
-    'as-35031'
+    'mantenimientor5pro'
 ];
 
 const getEditDistance = (a, b) => {
