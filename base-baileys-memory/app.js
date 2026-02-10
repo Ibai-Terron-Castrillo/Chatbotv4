@@ -19,6 +19,9 @@ const noReplies = new Set(['no', 'n']);
 // --- Markel & Ibai --- Guarda solicitudes de ayuda pendientes
 const pendingHelp = new Map();
 
+// --- Markel --- Tiempo de expiración para solicitudes pendientes (5 minutos)
+const PENDING_TIMEOUT_MS = 5 * 60 * 1000;
+
 async function startBot() {
     // Iker Guillamon -- me ha fallado alguna vez cuando se utiliza mucho... cuando ocurre esto, hay que borrar carpeta de cache
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -107,8 +110,17 @@ async function startBot() {
             let command = userMessage.trim().toLowerCase();
             console.log(`📩 Mensaje de ${senderJid}: "${userMessage}"`);
 
+            const now = Date.now();
+
             // --- Markel & Ibai --- Manejar solicitudes de ayuda pendientes (estado de la conversación)
             const pendingPhone = pendingHelp.get(senderJid);
+            if (pendingPhone && now - pendingPhone.createdAt > PENDING_TIMEOUT_MS) {
+                pendingHelp.delete(senderJid);
+                await sock.sendMessage(senderJid, {
+                    text: 'La solicitud de ayuda ha expirado. Escribe "ayuda" para empezar de nuevo.'
+                });
+                return;
+            }
             if (pendingPhone && command !== 'ayuda') {
                 if (command === 'no' || command === 'salir' || command === 'cancelar') {
                     pendingHelp.delete(senderJid);
@@ -130,7 +142,11 @@ async function startBot() {
                         return;
                     }
 
-                    pendingHelp.set(senderJid, { step: 'installation', phone: normalizedPhone });
+                    pendingHelp.set(senderJid, {
+                        step: 'installation',
+                        phone: normalizedPhone,
+                        createdAt: pendingPhone.createdAt
+                    });
                     await sock.sendMessage(senderJid, {
                         text: 'Gracias. Ahora escribe el nombre de la instalacion.\n\nPara cancelar, escriba "no", "salir" o "cancelar".'
                     });
@@ -154,12 +170,19 @@ async function startBot() {
             }
 
             // --- Markel & Ibai --- Manejar sugerencias pendientes
-            const pending = pendingSuggestions.get(senderJid);
-            if (pending && yesReplies.has(command)) {
-                command = pending;
+            const pendingSuggestion = pendingSuggestions.get(senderJid);
+            if (pendingSuggestion && now - pendingSuggestion.createdAt > PENDING_TIMEOUT_MS) {
+                pendingSuggestions.delete(senderJid);
+                await sock.sendMessage(senderJid, {
+                    text: 'La sugerencia ha expirado. Escribe el comando de nuevo cuando quieras.'
+                });
+                return;
+            }
+            if (pendingSuggestion && yesReplies.has(command)) {
+                command = pendingSuggestion.command;
                 pendingSuggestions.delete(senderJid);
                 console.log(`✅ Confirmada sugerencia "${command}" para ${senderJid}`);
-            } else if (pending && noReplies.has(command)) {
+            } else if (pendingSuggestion && noReplies.has(command)) {
                 pendingSuggestions.delete(senderJid);
                 await sock.sendMessage(senderJid, {
                     text: 'De acuerdo, escribe el comando de nuevo.'
@@ -172,7 +195,7 @@ async function startBot() {
 
             // --- Markel & Ibai --- 3 opciones principales: ayuda, error y manual
             if (command === 'ayuda') {
-                pendingHelp.set(senderJid, { step: 'phone' });
+                pendingHelp.set(senderJid, { step: 'phone', createdAt: now });
                 await sock.sendMessage(senderJid, {
                     text: 'Para ayudarte, escribe tu telefono (con prefijo internacional Eg: +34 111222333).\n\nPara cancelar, escriba "no", "salir" o "cancelar".'
                 });
@@ -244,7 +267,7 @@ async function startBot() {
             } else {
                 const closest = getClosestCommand(command);
                 if (closest) {
-                    pendingSuggestions.set(senderJid, closest);
+                    pendingSuggestions.set(senderJid, { command: closest, createdAt: now });
                     await sock.sendMessage(senderJid, {
                         text: `Comando no reconocido. ¿Quisiste decir "${closest}"? Contesta si o no.`
                     });
