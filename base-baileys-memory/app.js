@@ -8,8 +8,13 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 
+// --- Markel & Ibai --- Guarda sugerencias pendientes por usuario para confirmar con "si"
+const pendingSuggestions = new Map();
+const yesReplies = new Set(['si', 'sí', 'yes', 'y', 'ok', 'vale']);
+const noReplies = new Set(['no', 'n']);
+
 async function startBot() {
-    // Iker Guillamon -- me ha fallado alguna vez cuando se utiliza mucho... cuando ocurre eto, hay que borrar carpeta de cache
+    // Iker Guillamon -- me ha fallado alguna vez cuando se utiliza mucho... cuando ocurre esto, hay que borrar carpeta de cache
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
     //Iker Guillamon --> funcionando bien, sin usar la oficial.
@@ -34,7 +39,7 @@ async function startBot() {
             console.log('✅ ¡Conectado a WhatsApp! El bot está listo.');
         }
 
-        // Iker Guillamon--- reeconexion.
+        // Iker Guillamon--- reconexión.
         if (connection === 'close') {
             let shouldReconnect = false;
             if (lastDisconnect) {
@@ -91,8 +96,22 @@ async function startBot() {
                 return;
             }
 
-            const command = userMessage.trim().toLowerCase();
+            let command = userMessage.trim().toLowerCase();
             console.log(`📩 Mensaje de ${senderJid}: "${userMessage}"`);
+
+            // --- Markel & Ibai --- Manejar sugerencias pendientes
+            const pending = pendingSuggestions.get(senderJid);
+            if (pending && yesReplies.has(command)) {
+                command = pending;
+                pendingSuggestions.delete(senderJid);
+                console.log(`✅ Confirmada sugerencia "${command}" para ${senderJid}`);
+            } else if (pending && noReplies.has(command)) {
+                pendingSuggestions.delete(senderJid);
+                await sock.sendMessage(senderJid, {
+                    text: 'De acuerdo, escribe el comando de nuevo cuando quieras.'
+                });
+                return;
+            }
 
             const pdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
             console.log(`📂 Buscando manual en: ${pdfPath}`);
@@ -103,7 +122,13 @@ async function startBot() {
                     text: 'Bienvenido al chat de SmartLog. Te ayudaré con el *análisis de errores*.\n\nA continuación, escribe *SOLO* el número de error.\nPor ejemplo, si tienes AutoStore con el fallo *1_LIFT_ERROR*, escribe solo el número *1*. Si quieres errores de Smartlift, escribe *lift*.' 
                 });
             }
-            // 
+
+            // --- Markel & Ibai --- añadimos opción de ayuda para contactar con gestor de incidencias
+            else if (command === 'ayuda') {
+
+            }
+                
+
             else if (/^\d+$/.test(command) || command === 'lift') {
                 const errorCode = command;
                 const pdfPath = path.join(__dirname, 'images', `${errorCode}.pdf`);
@@ -174,12 +199,13 @@ async function startBot() {
             } else {
                 const closest = getClosestCommand(command);
                 if (closest) {
+                    pendingSuggestions.set(senderJid, closest);
                     await sock.sendMessage(senderJid, {
-                        text: `Comando no reconocido. ¿Quisiste decir "${closest}"?`
+                        text: `Comando no reconocido. ¿Quisiste decir "${closest}"? Contesta si o no.`
                     });
                 } else {
                     await sock.sendMessage(senderJid, { 
-                        text: 'Comando no reconocido. Usa "error" para análisis de errores o "manual" para ver manuales.' 
+                        text: 'Comando no reconocido. Usa "error" para análisis de errores, "manual" para ver manuales o "ayuda" para solicitar ayuda de un gestor.' 
                     });
                 }
             }
