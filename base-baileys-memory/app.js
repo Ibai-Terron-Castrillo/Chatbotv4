@@ -141,13 +141,13 @@ async function startBot() {
             else if (command === 'manual') {
                 const manualText = `Bienvenido al chat de SmartLan. Te ayudaré con los manuales. Tienes 3 opciones:\n\n` +
                                  `1. Si quieres *sustitución de elementos* (ej: AS-35031), escribe solo el código.\n` +
-                                 `2. Si quieres *manual de mantenimiento*, escribe: *mantenimiento*.\n` +
+                                 `2. Si quieres *manual de mantenimiento*, escribe: *mantenimiento* o *mantenimientor5pro*.\n` +
                                  `3. Si quieres ver *la tensión de las correas*, escribe: *tension*.\n\n` +
                                  `Escribe el código o la opción deseada:`;
                 await sock.sendMessage(senderJid, { text: manualText });
             }
             // 
-            else if (['as-35031', 'mantenimiento', 'tension'].includes(command)) {
+            else if (['as-35031', 'mantenimiento', 'mantenimientor5pro', 'tension'].includes(command)) {
                 const pdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
                 console.log(`📂 Buscando manual en: ${pdfPath}`);
 
@@ -179,11 +179,19 @@ async function startBot() {
                     });
                 }
             }
-            // 
+
+            // --- Markel Biain --- sugerencia de error de tipeo
             else if (userMessage !== '') {
-                await sock.sendMessage(senderJid, { 
-                    text: 'Comando no reconocido. Usa "error" para análisis de errores o "manual" para ver manuales.' 
-                });
+                const closest = getClosestCommand(command);
+                if (closest) {
+                    await sock.sendMessage(senderJid, {
+                        text: `Comando no reconocido. ¿Quisiste decir "${closest}"?`
+                    });
+                } else {
+                    await sock.sendMessage(senderJid, { 
+                        text: 'Comando no reconocido. Usa "error" para análisis de errores o "manual" para ver manuales.' 
+                    });
+                }
             }
         } catch (error) {
             console.error('💥 Error procesando mensaje:', error);
@@ -194,3 +202,54 @@ async function startBot() {
 // Iniciar el bot
 console.log('🚀 Iniciando bot con Baileys...');
 startBot().catch(err => console.error('💥 Error fatal al iniciar:', err));
+
+// --- Markel Biain --- funciones para sugerir comandos similares en caso de error de tipeo
+const knownCommands = [
+    'error',
+    'manual',
+    'lift',
+    'mantenimiento',
+    'tension',
+    'mantenimientor5pro'
+];
+
+const getEditDistance = (a, b) => {
+    const aLen = a.length;
+    const bLen = b.length;
+    const dp = Array.from({ length: aLen + 1 }, () => Array(bLen + 1).fill(0));
+
+    for (let i = 0; i <= aLen; i++) dp[i][0] = i;
+    for (let j = 0; j <= bLen; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= aLen; i++) {
+        for (let j = 1; j <= bLen; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            dp[i][j] = Math.min(
+                dp[i - 1][j] + 1,
+                dp[i][j - 1] + 1,
+                dp[i - 1][j - 1] + cost
+            );
+        }
+    }
+
+    return dp[aLen][bLen];
+};
+
+const getClosestCommand = (input) => {
+    let best = null;
+    let bestDistance = Infinity;
+
+    for (const cmd of knownCommands) {
+        const distance = getEditDistance(input, cmd);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = cmd;
+        }
+    }
+
+    if (best && bestDistance <= 1) {
+        return best;
+    }
+
+    return null;
+};
