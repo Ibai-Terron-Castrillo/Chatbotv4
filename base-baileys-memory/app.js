@@ -16,6 +16,9 @@ const pendingSuggestions = new Map();
 const yesReplies = new Set(['si', 'sí', 'yes', 'y', 'ok', 'vale']);
 const noReplies = new Set(['no', 'n']);
 
+// --- Markel & Ibai --- Guarda solicitudes de ayuda pendientes
+const pendingHelp = new Map();
+
 async function startBot() {
     // Iker Guillamon -- me ha fallado alguna vez cuando se utiliza mucho... cuando ocurre esto, hay que borrar carpeta de cache
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -108,6 +111,52 @@ async function startBot() {
             let command = userMessage.trim().toLowerCase();
             console.log(`📩 Mensaje de ${senderJid}: "${userMessage}"`);
 
+            // --- Markel & Ibai --- Manejar solicitudes de ayuda pendientes (estado de la conversación)
+            const pendingPhone = pendingHelp.get(senderJid);
+            if (pendingPhone && command !== 'ayuda') {
+                if (command === 'no' || command === 'salir' || command === 'cancelar') {
+                    pendingHelp.delete(senderJid);
+                    await sock.sendMessage(senderJid, {
+                        text: 'Solicitud de ayuda cancelada.'
+                    });
+                    return;
+                }
+
+                if (pendingPhone.step === 'phone') {
+                    const rawPhone = userMessage.trim();
+                    const normalizedPhone = rawPhone.replace(/[^0-9+]/g, '');
+                    const phoneRegex = /^\+[0-9]{11}$/;
+
+                    if (!phoneRegex.test(normalizedPhone)) {
+                        await sock.sendMessage(senderJid, {
+                            text: 'Formato invalido. Envia el numero de telefono con prefijo internacional. Ej: +34 123456789\n\nPara cancelar, escriba "no", "salir" o "cancelar".'
+                        });
+                        return;
+                    }
+
+                    pendingHelp.set(senderJid, { step: 'installation', phone: normalizedPhone });
+                    await sock.sendMessage(senderJid, {
+                        text: 'Gracias. Ahora escribe el nombre de la instalacion.\n\nPara cancelar, escriba "no", "salir" o "cancelar".'
+                    });
+                    return;
+                }
+
+                if (pendingPhone.step === 'installation') {
+                    const installation = userMessage.trim();
+
+                    await sock.sendMessage(helpGroupJid, {
+                        text: `Solicitud de ayuda.\n\nTelefono: ${pendingPhone.phone}.\n\nInstalacion: ${installation}.`
+                    });
+
+                    pendingHelp.delete(senderJid);
+
+                    await sock.sendMessage(senderJid, {
+                        text: 'He enviado tu solicitud al equipo. En breve te contactaran.'
+                    });
+                    return;
+                }
+            }
+
             // --- Markel & Ibai --- Manejar sugerencias pendientes
             const pending = pendingSuggestions.get(senderJid);
             if (pending && yesReplies.has(command)) {
@@ -126,13 +175,10 @@ async function startBot() {
             console.log(`📂 Buscando manual en: ${pdfPath}`);
 
             // --- Markel & Ibai --- añadimos opción de ayuda para contactar con gestor de incidencias
-            if (command === 'ayuda') {
-                const phoneNumber = senderJid.split('@')[0]; // ARREGLAR: extraer número de teléfono del JID
-                await sock.sendMessage(helpGroupJid, {
-                    text: `Solicitud de ayuda. Usuario: ${phoneNumber}.`
-                });
+            if (command === 'help' || command === 'ayuda') {
+                pendingHelp.set(senderJid, { step: 'phone' });
                 await sock.sendMessage(senderJid, {
-                    text: 'He avisado al equipo. En breve te contactaran.'
+                    text: 'Para ayudarte, escribe tu telefono (con prefijo internacional Eg: +34 111222333).\n\nPara cancelar, escriba "no", "salir" o "cancelar".'
                 });
             }
             else if (command === 'error') {
@@ -218,7 +264,7 @@ async function startBot() {
                     });
                 } else {
                     await sock.sendMessage(senderJid, { 
-                        text: 'Comando no reconocido. Usa "error" para análisis de errores, "manual" para ver manuales o "ayuda" para solicitar ayuda de un gestor.' 
+                        text: 'Comando no reconocido, use:\n\n"error" para análisis de errores.\n\n"manual" para ver manuales.\n\n"ayuda" para solicitar ayuda de un gestor.' 
                     });
                 }
             }
@@ -241,7 +287,8 @@ const knownCommands = [
     'lift',
     'mantenimiento',
     'tension',
-    'mantenimientor5pro'
+    'mantenimientor5pro',
+    'ayuda'
 ];
 
 const getEditDistance = (a, b) => {
