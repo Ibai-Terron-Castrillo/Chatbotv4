@@ -168,7 +168,7 @@ async function startBot() {
             }
 
             const manualPdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
-            const errorPdfPath = path.join(__dirname, 'images', `${command}.pdf`);
+            const errorPdfPath = path.join(__dirname, 'error', `${command}.pdf`);
 
             // --- Markel & Ibai --- 3 opciones principales: ayuda, error y manual
             if (command === 'ayuda') {
