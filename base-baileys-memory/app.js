@@ -31,7 +31,6 @@ async function startBot() {
 
     // Iker Guillamon --- evitar que se borre el acceso, funciona bien la libreria.
     sock.ev.on('creds.update', saveCreds);
-
     
     sock.ev.on('connection.update', (update) => {
         const { connection, qr, lastDisconnect } = update;
@@ -61,13 +60,11 @@ async function startBot() {
             }
         }
         
-        
         if (lastDisconnect?.error?.output?.statusCode === 515) {
             console.log('⚠️  Error 515 detectado. WhatsApp rechazó la conexión.');
             console.log('Solución: Borra la carpeta "auth_info_baileys" y reinicia el bot.');
         }
     });
-
     
     sock.ev.on('messages.upsert', async ({ messages }) => {
         try {
@@ -84,7 +81,6 @@ async function startBot() {
                 return;
             }
             
-
             let userMessage = '';
             
             if (msg.message.conversation) {
@@ -121,7 +117,7 @@ async function startBot() {
                     });
                     return;
                 }
-
+                // Si estamos en el paso de pedir el teléfono, validamos el formato antes de avanzar
                 if (pendingPhone.step === 'phone') {
                     const rawPhone = userMessage.trim();
                     const normalizedPhone = rawPhone.replace(/[^0-9+]/g, '');
@@ -140,7 +136,7 @@ async function startBot() {
                     });
                     return;
                 }
-
+                // Si estamos en el paso de pedir la instalación, guardamos la información y enviamos la solicitud al grupo
                 if (pendingPhone.step === 'installation') {
                     const installation = userMessage.trim();
 
@@ -166,16 +162,16 @@ async function startBot() {
             } else if (pending && noReplies.has(command)) {
                 pendingSuggestions.delete(senderJid);
                 await sock.sendMessage(senderJid, {
-                    text: 'De acuerdo, escribe el comando de nuevo cuando quieras.'
+                    text: 'De acuerdo, escribe el comando de nuevo.'
                 });
                 return;
             }
 
-            const pdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
-            console.log(`📂 Buscando manual en: ${pdfPath}`);
+            const manualPdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
+            const errorPdfPath = path.join(__dirname, 'images', `${command}.pdf`);
 
-            // --- Markel & Ibai --- añadimos opción de ayuda para contactar con gestor de incidencias
-            if (command === 'help' || command === 'ayuda') {
+            // --- Markel & Ibai --- 3 opciones principales: ayuda, error y manual
+            if (command === 'ayuda') {
                 pendingHelp.set(senderJid, { step: 'phone' });
                 await sock.sendMessage(senderJid, {
                     text: 'Para ayudarte, escribe tu telefono (con prefijo internacional Eg: +34 111222333).\n\nPara cancelar, escriba "no", "salir" o "cancelar".'
@@ -183,64 +179,52 @@ async function startBot() {
             }
             else if (command === 'error') {
                 await sock.sendMessage(senderJid, { 
-                    text: 'Bienvenido al chat de SmartLog. Te ayudaré con el *análisis de errores*.\n\nA continuación, escribe *SOLO* el número de error.\nPor ejemplo, si tienes AutoStore con el fallo *1_LIFT_ERROR*, escribe solo el número *1*. Si quieres errores de Smartlift, escribe *lift*.' 
+                    text: 'Bienvenido al chat de SmartLog. Te ayudaré con el *análisis de errores*.\n\nA continuación, escribe *SOLO* el número de error.\nPor ejemplo, si tienes AutoStore con el fallo *1_LIFT_ERROR*, escribe solo el número "1". Si quieres errores de Smartlift, escribe "lift".' 
                 });
             }
-                
+            else if (command === 'manual') {
+                const manualText = `Bienvenido al chat de SmartLan. Te ayudaré con los manuales. Tienes 3 opciones:\n\n` +
+                                 `1. Si quieres *sustitución de elementos* (ej: AS-35031), escribe solo el código.\n` +
+                                 `2. Si quieres *manual de mantenimiento*, escribe: "mantenimiento" o "mantenimientor5pro".\n` +
+                                 `3. Si quieres ver *la tensión de las correas*, escribe: "tension".\n\n` +
+                                 `Escribe el código o la opción deseada:`;
+                await sock.sendMessage(senderJid, { text: manualText });
+            }
 
-            else if (/^\d+$/.test(command) || command === 'lift') {
-                const errorCode = command;
-                const pdfPath = path.join(__dirname, 'images', `${errorCode}.pdf`);
-                console.log(`📂 Buscando archivo en: ${pdfPath}`);
-
-                if (fs.existsSync(pdfPath)) {
-                    try {
-                        await sock.sendMessage(senderJid, {
-                            text: `Aquí está el documento para el error ${errorCode}:`
-                        });
-                        
-                        
-                        await sock.sendMessage(senderJid, {
-                            document: fs.readFileSync(pdfPath),
-                            fileName: `Error_${errorCode}.pdf`,
-                            mimetype: 'application/pdf'
-                        });
-                        
-                        await sock.sendMessage(senderJid, { 
-                            text: `Aquí tienes el manual de ${errorCode}. Si necesitas cualquier otra cosa, vuelve a iniciar el proceso de *ChatbotSmartlog* o contacta con el gestor de incidencias.` 
-                        });
-                        console.log(`✅ PDF enviado para código: ${errorCode}`);
-                    } catch (sendError) {
-                        console.error('❌ Error al enviar el PDF:', sendError);
-                        await sock.sendMessage(senderJid, { 
-                            text: 'Lo siento, hubo un problema al enviar el documento. El archivo puede estar corrupto.' 
-                        });
-                    }
-                } else {
-                    console.log(`❌ Archivo NO encontrado para código: ${errorCode}`);
+            // --- Markel & Ibai --- buscar si existe error en carpeta de errores
+            else if (fs.existsSync(errorPdfPath)) {
+                console.log(`📂 Buscando archivo en: ${errorPdfPath}`);  
+                try {
+                    await sock.sendMessage(senderJid, {
+                        text: `Aquí está el documento para el error ${command}:`
+                    });
+                    await sock.sendMessage(senderJid, {
+                        document: fs.readFileSync(errorPdfPath),
+                        fileName: `Error_${command}.pdf`,
+                        mimetype: 'application/pdf'
+                    });
                     await sock.sendMessage(senderJid, { 
-                        text: 'Código de error no reconocido. El documento no existe. Por favor, verifica el código e inténtalo de nuevo.' 
+                        text: `Aquí tienes el manual de ${command}. Si necesitas cualquier otra cosa, vuelve a iniciar el proceso de *ChatbotSmartlog* o contacta con el gestor de incidencias.` 
+                    });
+                    console.log(`✅ PDF enviado para: ${command}`);
+                } catch (sendError) {
+                    console.error('❌ Error al enviar el PDF:', sendError);
+                    await sock.sendMessage(senderJid, { 
+                        text: 'Lo siento, hubo un problema al enviar el documento. El archivo puede estar corrupto.' 
                     });
                 }
             }
 
-            else if (command === 'manual') {
-                const manualText = `Bienvenido al chat de SmartLan. Te ayudaré con los manuales. Tienes 3 opciones:\n\n` +
-                                 `1. Si quieres *sustitución de elementos* (ej: AS-35031), escribe solo el código.\n` +
-                                 `2. Si quieres *manual de mantenimiento*, escribe: *mantenimiento* o *mantenimientor5pro*.\n` +
-                                 `3. Si quieres ver *la tensión de las correas*, escribe: *tension*.\n\n` +
-                                 `Escribe el código o la opción deseada:`;
-                await sock.sendMessage(senderJid, { text: manualText });
-            }
-// --- Markel & Ibai --- buscar input en carpeta de manuales
-            else if (fs.existsSync(pdfPath)) {
+            // --- Markel & Ibai --- buscar si existe manual en carpeta de manuales
+            else if (fs.existsSync(manualPdfPath)) {
+                console.log(`📂 Buscando archivo en: ${manualPdfPath}`);
                 try {
                     await sock.sendMessage(senderJid, {
                         text: `Aquí está el manual para ${command}:`
                     });
 
                     await sock.sendMessage(senderJid, {
-                        document: fs.readFileSync(pdfPath),
+                        document: fs.readFileSync(manualPdfPath),
                         fileName: `Manual_${command}.pdf`,
                         mimetype: 'application/pdf'
                     });
@@ -252,9 +236,11 @@ async function startBot() {
                 } catch (sendError) {
                     console.error('❌ Error al enviar el manual:', sendError);
                     await sock.sendMessage(senderJid, {
-                        text: 'Lo siento, hubo un problema al enviar el manual.'
+                        text: 'Lo siento, hubo un problema al enviar el manual. El archivo puede estar corrupto.'
                     });
                 }
+
+            // --- Markel & Ibai --- sugerir comando similar si no se encuentra el manual
             } else {
                 const closest = getClosestCommand(command);
                 if (closest) {
@@ -277,8 +263,6 @@ async function startBot() {
 // Iniciar el bot
 console.log('🚀 Iniciando bot con Baileys...');
 startBot().catch(err => console.error('💥 Error fatal al iniciar:', err));
-
-
 
 // --- Markel Biain --- funciones para sugerir comandos similares en caso de error de tipeo
 const knownCommands = [
