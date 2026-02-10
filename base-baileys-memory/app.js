@@ -72,11 +72,8 @@ async function startBot() {
     sock.ev.on('messages.upsert', async ({ messages }) => {
         try {
             const msg = messages[0];
-            
-            
+            const senderJid = msg.key.remoteJid; // Identificador del chat            
             if (!msg.message || msg.key.fromMe) return;
-
-            const senderJid = msg.key.remoteJid; // Identificador del chat
             
             // --- Markel & Ibai --- Ignorar mensajes en grupos
             if (senderJid.endsWith('@g.us')) {
@@ -197,7 +194,7 @@ async function startBot() {
             if (command === 'ayuda') {
                 pendingHelp.set(senderJid, { step: 'phone', createdAt: now });
                 await sock.sendMessage(senderJid, {
-                    text: 'Para ayudarte, escribe tu telefono (con prefijo internacional Eg: +34 111222333).\n\nPara cancelar, escriba "no", "salir" o "cancelar".'
+                    text: 'Para ayudarte, escribe tu telefono (con prefijo internacional Eg: +34 123456789).\n\nPara cancelar, escriba "no", "salir" o "cancelar".'
                 });
             }
             else if (command === 'error') {
