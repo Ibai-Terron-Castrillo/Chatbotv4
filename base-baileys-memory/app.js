@@ -8,6 +8,9 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 
+// Grupo destino para alertas de ayuda (Grupo gestores)
+const helpGroupJid = '120363402719094298@g.us';
+
 // --- Markel & Ibai --- Guarda sugerencias pendientes por usuario para confirmar con "si"
 const pendingSuggestions = new Map();
 const yesReplies = new Set(['si', 'sí', 'yes', 'y', 'ok', 'vale']);
@@ -72,6 +75,12 @@ async function startBot() {
 
             const senderJid = msg.key.remoteJid; // Identificador del chat
             
+            // --- Markel & Ibai --- Ignorar mensajes en grupos
+            if (senderJid.endsWith('@g.us')) {
+                console.log(`📩 Mensaje recibido en grupo ${senderJid}, ignorando.`);
+                return;
+            }
+            
             
             let userMessage = '';
             
@@ -116,16 +125,20 @@ async function startBot() {
             const pdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
             console.log(`📂 Buscando manual en: ${pdfPath}`);
 
-            // --- Iker Guillamon --- bucle inicial y principal
-            if (command === 'error') {
+            // --- Markel & Ibai --- añadimos opción de ayuda para contactar con gestor de incidencias
+            if (command === 'ayuda') {
+                const phoneNumber = senderJid.split('@')[0];
+                await sock.sendMessage(helpGroupJid, {
+                    text: `Solicitud de ayuda. Usuario: ${phoneNumber} (jid: ${senderJid}).`
+                });
+                await sock.sendMessage(senderJid, {
+                    text: 'He avisado al equipo. En breve te contactaran.'
+                });
+            }
+            else if (command === 'error') {
                 await sock.sendMessage(senderJid, { 
                     text: 'Bienvenido al chat de SmartLog. Te ayudaré con el *análisis de errores*.\n\nA continuación, escribe *SOLO* el número de error.\nPor ejemplo, si tienes AutoStore con el fallo *1_LIFT_ERROR*, escribe solo el número *1*. Si quieres errores de Smartlift, escribe *lift*.' 
                 });
-            }
-
-            // --- Markel & Ibai --- añadimos opción de ayuda para contactar con gestor de incidencias
-            else if (command === 'ayuda') {
-
             }
                 
 
@@ -218,6 +231,8 @@ async function startBot() {
 // Iniciar el bot
 console.log('🚀 Iniciando bot con Baileys...');
 startBot().catch(err => console.error('💥 Error fatal al iniciar:', err));
+
+
 
 // --- Markel Biain --- funciones para sugerir comandos similares en caso de error de tipeo
 const knownCommands = [
