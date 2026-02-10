@@ -16,7 +16,6 @@ async function startBot() {
     const sock = makeWASocket({
         auth: state,
         printQRInTerminal: false
-     
     });
 
     // Iker Guillamon --- evitar que se borre el acceso, funciona bien la libreria.
@@ -95,6 +94,9 @@ async function startBot() {
             const command = userMessage.trim().toLowerCase();
             console.log(`📩 Mensaje de ${senderJid}: "${userMessage}"`);
 
+            const pdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
+            console.log(`📂 Buscando manual en: ${pdfPath}`);
+
             // --- Iker Guillamon --- bucle inicial y principal
             if (command === 'error') {
                 await sock.sendMessage(senderJid, { 
@@ -137,7 +139,7 @@ async function startBot() {
                     });
                 }
             }
-            // 
+
             else if (command === 'manual') {
                 const manualText = `Bienvenido al chat de SmartLan. Te ayudaré con los manuales. Tienes 3 opciones:\n\n` +
                                  `1. Si quieres *sustitución de elementos* (ej: AS-35031), escribe solo el código.\n` +
@@ -146,42 +148,30 @@ async function startBot() {
                                  `Escribe el código o la opción deseada:`;
                 await sock.sendMessage(senderJid, { text: manualText });
             }
-            // 
-            else if (['as-35031', 'mantenimiento', 'mantenimientor5pro', 'tension'].includes(command)) {
-                const pdfPath = path.join(__dirname, 'manual', `${command}.pdf`);
-                console.log(`📂 Buscando manual en: ${pdfPath}`);
+// --- Markel & Ibai --- buscar input en carpeta de manuales
+            else if (fs.existsSync(pdfPath)) {
+                try {
+                    await sock.sendMessage(senderJid, {
+                        text: `Aquí está el manual para ${command}:`
+                    });
 
-                if (fs.existsSync(pdfPath)) {
-                    try {
-                        await sock.sendMessage(senderJid, {
-                            text: `Aquí está el manual para ${command}:`
-                        });
-                        
-                        await sock.sendMessage(senderJid, {
-                            document: fs.readFileSync(pdfPath),
-                            fileName: `Manual_${command}.pdf`,
-                            mimetype: 'application/pdf'
-                        });
-                        
-                        await sock.sendMessage(senderJid, { 
-                            text: `Aquí tienes el manual de ${command}. Si necesitas cualquier otra cosa, vuelve a iniciar el proceso del *ChatBotSmartlog* o contacta con el gestor de incidencias.` 
-                        });
-                        console.log(`✅ Manual enviado para: ${command}`);
-                    } catch (sendError) {
-                        console.error('❌ Error al enviar el manual:', sendError);
-                        await sock.sendMessage(senderJid, { 
-                            text: 'Lo siento, hubo un problema al enviar el manual.' 
-                        });
-                    }
-                } else {
-                    await sock.sendMessage(senderJid, { 
-                        text: 'Manual no disponible para esta opción.' 
+                    await sock.sendMessage(senderJid, {
+                        document: fs.readFileSync(pdfPath),
+                        fileName: `Manual_${command}.pdf`,
+                        mimetype: 'application/pdf'
+                    });
+
+                    await sock.sendMessage(senderJid, {
+                        text: `Aquí tienes el manual de ${command}. Si necesitas cualquier otra cosa, vuelve a iniciar el proceso del *ChatBotSmartlog* o contacta con el gestor de incidencias.`
+                    });
+                    console.log(`✅ Manual enviado para: ${command}`);
+                } catch (sendError) {
+                    console.error('❌ Error al enviar el manual:', sendError);
+                    await sock.sendMessage(senderJid, {
+                        text: 'Lo siento, hubo un problema al enviar el manual.'
                     });
                 }
-            }
-
-            // --- Markel Biain --- sugerencia de error de tipeo
-            else if (userMessage !== '') {
+            } else {
                 const closest = getClosestCommand(command);
                 if (closest) {
                     await sock.sendMessage(senderJid, {
