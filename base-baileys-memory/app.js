@@ -81,7 +81,7 @@ async function startBot() {
                 return;
             }
             
-            
+
             let userMessage = '';
             
             if (msg.message.conversation) {
@@ -127,9 +127,9 @@ async function startBot() {
 
             // --- Markel & Ibai --- añadimos opción de ayuda para contactar con gestor de incidencias
             if (command === 'ayuda') {
-                const phoneNumber = senderJid.split('@')[0];
+                const phoneNumber = senderJid.split('@')[0]; // ARREGLAR: extraer número de teléfono del JID
                 await sock.sendMessage(helpGroupJid, {
-                    text: `Solicitud de ayuda. Usuario: ${phoneNumber} (jid: ${senderJid}).`
+                    text: `Solicitud de ayuda. Usuario: ${phoneNumber}.`
                 });
                 await sock.sendMessage(senderJid, {
                     text: 'He avisado al equipo. En breve te contactaran.'
